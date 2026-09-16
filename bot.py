@@ -1,6 +1,7 @@
 """
 Live Design Studio
 Professional Discord Design Bot
+Version: 1.1.0
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ from datetime import datetime, timezone
 import discord
 from discord import app_commands
 from discord.ext import commands
-from PIL import Image
 
 from designer import create_design
 from ratings import (
@@ -28,10 +28,10 @@ from ratings import (
 # CONFIGURATION
 # ============================================================
 
-TOKEN = os.getenv("DISCORD_TOKEN")
-
 BOT_NAME = "Live Design Studio"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
+
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,7 +42,7 @@ logger = logging.getLogger(BOT_NAME)
 
 
 # ============================================================
-# DISCORD SETUP
+# DISCORD BOT
 # ============================================================
 
 intents = discord.Intents.default()
@@ -54,10 +54,45 @@ bot = commands.Bot(
 
 
 # ============================================================
-# DESIGN STORAGE
+# DESIGN REGISTRY
+# ============================================================
+# Keeps information about designs while the bot is running.
+# Persistent rating data is handled separately by ratings.py.
 # ============================================================
 
-design_cache: dict[str, dict] = {}
+design_registry: dict[str, dict] = {}
+
+
+# ============================================================
+# STYLE OPTIONS
+# ============================================================
+
+STYLE_CHOICES = [
+    app_commands.Choice(
+        name="💜 Purple",
+        value="purple",
+    ),
+    app_commands.Choice(
+        name="💙 Blue",
+        value="blue",
+    ),
+    app_commands.Choice(
+        name="❤️ Red",
+        value="red",
+    ),
+    app_commands.Choice(
+        name="💚 Green",
+        value="green",
+    ),
+    app_commands.Choice(
+        name="🏆 Gold",
+        value="gold",
+    ),
+    app_commands.Choice(
+        name="💗 Pink",
+        value="pink",
+    ),
+]
 
 
 # ============================================================
@@ -65,13 +100,21 @@ design_cache: dict[str, dict] = {}
 # ============================================================
 
 class RatingView(discord.ui.View):
+    """
+    Interactive 1–5 star rating interface.
+    """
 
-    def __init__(self, design_id: str):
-        super().__init__(timeout=86400)
+    def __init__(
+        self,
+        design_id: str,
+    ):
+        super().__init__(
+            timeout=86400
+        )
 
         self.design_id = design_id
 
-    async def rate(
+    async def submit_rating(
         self,
         interaction: discord.Interaction,
         rating: int,
@@ -79,32 +122,28 @@ class RatingView(discord.ui.View):
 
         try:
 
-            user_id = str(
-                interaction.user.id
-            )
-
             result = save_rating(
                 design_id=self.design_id,
-                user_id=user_id,
+                user_id=str(
+                    interaction.user.id
+                ),
                 rating=rating,
             )
-
-            action = result["action"]
-
-            if action == "created":
-                message = "הדירוג שלך נשמר! ⭐"
-            else:
-                message = "הדירוג שלך עודכן! ⭐"
 
             average = result["average"]
             count = result["count"]
 
+            if result["action"] == "created":
+                message = "הדירוג שלך נשמר!"
+            else:
+                message = "הדירוג שלך עודכן!"
+
             await interaction.response.send_message(
                 (
-                    f"✅ {message}\n\n"
-                    f"**הדירוג שלך:** {rating}/5\n"
-                    f"**ממוצע:** {average}/5\n"
-                    f"**מספר דירוגים:** {count}"
+                    f"✅ **{message}**\n\n"
+                    f"⭐ הדירוג שלך: **{rating}/5**\n"
+                    f"📊 ממוצע: **{average}/5**\n"
+                    f"👥 מספר דירוגים: **{count}**"
                 ),
                 ephemeral=True,
             )
@@ -112,7 +151,7 @@ class RatingView(discord.ui.View):
         except Exception:
 
             logger.exception(
-                "Failed to save rating"
+                "Rating submission failed"
             )
 
             if not interaction.response.is_done():
@@ -123,71 +162,71 @@ class RatingView(discord.ui.View):
                 )
 
     @discord.ui.button(
-        label="⭐",
+        label="1 ⭐",
         style=discord.ButtonStyle.secondary,
     )
-    async def one(
+    async def rating_one(
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
-        await self.rate(
+        await self.submit_rating(
             interaction,
             1,
         )
 
     @discord.ui.button(
-        label="⭐⭐",
+        label="2 ⭐",
         style=discord.ButtonStyle.secondary,
     )
-    async def two(
+    async def rating_two(
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
-        await self.rate(
+        await self.submit_rating(
             interaction,
             2,
         )
 
     @discord.ui.button(
-        label="⭐⭐⭐",
+        label="3 ⭐",
         style=discord.ButtonStyle.primary,
     )
-    async def three(
+    async def rating_three(
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
-        await self.rate(
+        await self.submit_rating(
             interaction,
             3,
         )
 
     @discord.ui.button(
-        label="⭐⭐⭐⭐",
+        label="4 ⭐",
         style=discord.ButtonStyle.primary,
     )
-    async def four(
+    async def rating_four(
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
-        await self.rate(
+        await self.submit_rating(
             interaction,
             4,
         )
 
     @discord.ui.button(
-        label="⭐⭐⭐⭐⭐",
+        label="5 ⭐",
         style=discord.ButtonStyle.success,
     )
-    async def five(
+    async def rating_five(
         self,
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ):
-        await self.rate(
+        await self.submit_rating(
             interaction,
             5,
         )
@@ -203,16 +242,17 @@ class RatingView(discord.ui.View):
 )
 @app_commands.describe(
     name="השם שיופיע בעיצוב",
-    style="סגנון: gaming, anime, streamer וכו'",
-    color="purple / blue / red / green / gold / pink",
+    style="סגנון וצבע של העיצוב",
     headline="הכותרת הראשית",
     subtitle="טקסט נוסף, אופציונלי",
+)
+@app_commands.choices(
+    style=STYLE_CHOICES
 )
 async def design_command(
     interaction: discord.Interaction,
     name: str,
-    style: str,
-    color: str,
+    style: app_commands.Choice[str],
     headline: str,
     subtitle: str = "",
 ):
@@ -221,10 +261,14 @@ async def design_command(
 
     try:
 
+        # ----------------------------------------------------
+        # Generate unique design ID
+        # ----------------------------------------------------
+
         timestamp = datetime.now(
             timezone.utc
         ).strftime(
-            "%Y%m%d%H%M%S"
+            "%Y%m%d%H%M%S%f"
         )
 
         design_id = (
@@ -233,18 +277,18 @@ async def design_command(
         )
 
         # ----------------------------------------------------
-        # Generate design
+        # Generate image
         # ----------------------------------------------------
 
         image = create_design(
             name=name,
-            style=color,
+            style=style.value,
             headline=headline,
             subtitle=subtitle,
         )
 
         # ----------------------------------------------------
-        # Convert image to Discord attachment
+        # Convert PIL image to PNG
         # ----------------------------------------------------
 
         buffer = io.BytesIO()
@@ -252,6 +296,7 @@ async def design_command(
         image.save(
             buffer,
             format="PNG",
+            optimize=True,
         )
 
         buffer.seek(0)
@@ -262,17 +307,16 @@ async def design_command(
         )
 
         # ----------------------------------------------------
-        # Cache design metadata
+        # Register design
         # ----------------------------------------------------
 
-        design_cache[design_id] = {
+        design_registry[design_id] = {
             "design_id": design_id,
             "user_id": str(
                 interaction.user.id
             ),
             "name": name,
-            "style": style,
-            "color": color,
+            "style": style.value,
             "headline": headline,
             "subtitle": subtitle,
             "created_at": datetime.now(
@@ -281,16 +325,16 @@ async def design_command(
         }
 
         # ----------------------------------------------------
-        # Embed
+        # Create embed
         # ----------------------------------------------------
 
         embed = discord.Embed(
             title="🎨 העיצוב שלך מוכן!",
             description=(
-                "יצרנו עבורך עיצוב מותאם אישית.\n\n"
+                "עיצוב לייב חדש נוצר במיוחד עבורך.\n\n"
                 f"👤 **שם:** {name}\n"
-                f"🎨 **סגנון:** {style}\n"
-                f"🌈 **צבע:** {color}\n"
+                f"🎨 **סגנון:** {style.name}\n"
+                f"📝 **כותרת:** {headline}\n"
                 f"🆔 **Design ID:** `{design_id}`"
             ),
             color=discord.Color.blurple(),
@@ -303,12 +347,12 @@ async def design_command(
         embed.set_footer(
             text=(
                 f"{BOT_NAME} • "
-                f"v{VERSION}"
+                f"Rate this design below ⭐"
             )
         )
 
         # ----------------------------------------------------
-        # Send
+        # Send result
         # ----------------------------------------------------
 
         await interaction.followup.send(
@@ -320,8 +364,10 @@ async def design_command(
         )
 
         logger.info(
-            "Design generated successfully: %s",
+            "Design generated | id=%s | user=%s | style=%s",
             design_id,
+            interaction.user.id,
+            style.value,
         )
 
     except Exception:
@@ -332,8 +378,8 @@ async def design_command(
 
         await interaction.followup.send(
             (
-                "❌ הייתה שגיאה ביצירת העיצוב.\n"
-                "בדוק את הלוגים של הבוט."
+                "❌ **שגיאה ביצירת העיצוב**\n"
+                "נסה שוב בעוד רגע."
             ),
             ephemeral=True,
         )
@@ -349,7 +395,7 @@ async def design_command(
 )
 @app_commands.describe(
     design_id="ה-ID של העיצוב",
-    rating="דירוג בין 1 ל-5",
+    rating="הדירוג שלך",
 )
 @app_commands.choices(
     rating=[
@@ -397,14 +443,11 @@ async def rate_command(
 
         await interaction.response.send_message(
             (
-                "⭐ **הדירוג נשמר!**\n\n"
-                f"**עיצוב:** `{design_id}`\n"
-                f"**הדירוג שלך:** "
-                f"{rating.value}/5\n"
-                f"**ממוצע:** "
-                f"{stats['average']}/5\n"
-                f"**דירוגים:** "
-                f"{stats['count']}"
+                "⭐ **הדירוג נשמר בהצלחה!**\n\n"
+                f"🆔 עיצוב: `{design_id}`\n"
+                f"⭐ הדירוג שלך: **{rating.value}/5**\n"
+                f"📊 ממוצע: **{stats['average']}/5**\n"
+                f"👥 דירוגים: **{stats['count']}**"
             ),
             ephemeral=True,
         )
@@ -419,11 +462,11 @@ async def rate_command(
     except Exception:
 
         logger.exception(
-            "Rating command failed"
+            "Rate command failed"
         )
 
         await interaction.response.send_message(
-            "❌ שגיאה בשמירת הדירוג.",
+            "❌ אירעה שגיאה בשמירת הדירוג.",
             ephemeral=True,
         )
 
@@ -434,7 +477,7 @@ async def rate_command(
 
 @bot.tree.command(
     name="stats",
-    description="Show community design statistics",
+    description="Show design community statistics",
 )
 async def stats_command(
     interaction: discord.Interaction,
@@ -449,7 +492,10 @@ async def stats_command(
         ]
 
         embed = discord.Embed(
-            title="📊 Design Studio Statistics",
+            title="📊 Live Design Studio",
+            description=(
+                "סטטיסטיקות הדירוגים של הקהילה"
+            ),
             color=discord.Color.blurple(),
         )
 
@@ -484,23 +530,27 @@ async def stats_command(
         )
 
         embed.add_field(
-            name="🌟 Average",
+            name="🌟 Average Rating",
             value=(
-                f"{stats['average']}/5"
+                f"**{stats['average']}/5**"
             ),
             inline=False,
         )
 
         embed.add_field(
-            name="Rating Distribution",
+            name="📈 Distribution",
             value=(
-                f"⭐ 1: {distribution['1']}\n"
-                f"⭐⭐ 2: {distribution['2']}\n"
-                f"⭐⭐⭐ 3: {distribution['3']}\n"
-                f"⭐⭐⭐⭐ 4: {distribution['4']}\n"
-                f"⭐⭐⭐⭐⭐ 5: {distribution['5']}"
+                f"⭐ 1 — {distribution['1']}\n"
+                f"⭐⭐ 2 — {distribution['2']}\n"
+                f"⭐⭐⭐ 3 — {distribution['3']}\n"
+                f"⭐⭐⭐⭐ 4 — {distribution['4']}\n"
+                f"⭐⭐⭐⭐⭐ 5 — {distribution['5']}"
             ),
             inline=False,
+        )
+
+        embed.set_footer(
+            text=BOT_NAME
         )
 
         await interaction.response.send_message(
@@ -547,7 +597,9 @@ async def myrating_command(
         if rating is None:
 
             await interaction.response.send_message(
-                "ℹ️ עדיין לא דירגת את העיצוב הזה.",
+                (
+                    "ℹ️ עדיין לא דירגת את העיצוב הזה."
+                ),
                 ephemeral=True,
             )
 
@@ -557,9 +609,9 @@ async def myrating_command(
 
         await interaction.response.send_message(
             (
-                f"🎨 **הדירוג שלך**\n\n"
-                f"עיצוב: `{design_id}`\n"
-                f"דירוג: {stars} ({rating}/5)"
+                "🎨 **הדירוג שלך**\n\n"
+                f"🆔 עיצוב: `{design_id}`\n"
+                f"⭐ דירוג: {stars} **({rating}/5)**"
             ),
             ephemeral=True,
         )
@@ -577,35 +629,36 @@ async def myrating_command(
 
 
 # ============================================================
-# BOT EVENTS
+# BOT READY
 # ============================================================
 
 @bot.event
 async def on_ready():
 
     logger.info(
-        "Connected as %s",
+        "Logged in as %s",
         bot.user,
     )
 
     try:
 
-        synced = await bot.tree.sync()
+        synced_commands = await bot.tree.sync()
 
         logger.info(
-            "Successfully synced %s commands",
-            len(synced),
+            "Synced %s slash commands",
+            len(synced_commands),
         )
 
         logger.info(
-            "%s is online!",
+            "%s v%s is online",
             BOT_NAME,
+            VERSION,
         )
 
     except Exception:
 
         logger.exception(
-            "Failed to synchronize commands"
+            "Failed to synchronize slash commands"
         )
 
 
@@ -619,7 +672,7 @@ def main():
 
         raise RuntimeError(
             "DISCORD_TOKEN environment variable "
-            "is not configured."
+            "is missing."
         )
 
     logger.info(
