@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment secrets
+.env
+.env.*
+
+# Keep the example configuration
+!.env.example
+
+# Generated designs
+designs/*.png
+designs/*.jpg
+designs/*.jpeg
+designs/*.webp
+
+# Local data
+data/*.json
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
